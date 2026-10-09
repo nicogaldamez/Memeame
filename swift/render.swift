@@ -1,9 +1,12 @@
 import AVFoundation
 import AppKit
 import ImageIO
+import Vision
 
 // Uso: memeame-render <entrada> <salida.png|.jpg> <texto arriba> <texto abajo>
 //      memeame-render thumbnail <video> <salida.jpg>
+//      memeame-render clipboard <salida.png>   (imprime la ruta de la imagen del portapapeles)
+//      memeame-render ocr <imagen>             (imprime el texto de la imagen, una línea por renglón)
 
 func fail(_ message: String) -> Never {
   fputs(message + "\n", stderr)
@@ -25,6 +28,48 @@ if args.count == 4, args[1] == "thumbnail" {
     try data.write(to: URL(fileURLWithPath: args[3]))
   } catch {
     fail("No se pudo escribir \(args[3]): \(error.localizedDescription)")
+  }
+  exit(0)
+}
+
+if args.count == 3, args[1] == "clipboard" {
+  let pasteboard = NSPasteboard.general
+  // Un archivo copiado desde Finder se usa tal cual, así los GIF y videos no pierden la animación.
+  let files = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]
+  if let file = files?.first {
+    print(file.path)
+    exit(0)
+  }
+  let png =
+    pasteboard.data(forType: .png)
+    ?? pasteboard.data(forType: .tiff).flatMap { NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:]) }
+  guard let png else { fail("No hay ninguna imagen en el portapapeles") }
+  do {
+    try png.write(to: URL(fileURLWithPath: args[2]))
+  } catch {
+    fail("No se pudo escribir \(args[2]): \(error.localizedDescription)")
+  }
+  print(args[2])
+  exit(0)
+}
+
+if args.count == 3, args[1] == "ocr" {
+  guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: args[2]) as CFURL, nil),
+    let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+  else { fail("No se pudo leer la imagen: \(args[2])") }
+  let request = VNRecognizeTextRequest()
+  request.recognitionLevel = .accurate
+  request.recognitionLanguages = ["es-ES", "en-US"]
+  request.usesLanguageCorrection = true
+  do {
+    try VNImageRequestHandler(cgImage: image).perform([request])
+  } catch {
+    fail("No se pudo leer el texto: \(error.localizedDescription)")
+  }
+  for observation in request.results ?? [] {
+    if let candidate = observation.topCandidates(1).first, candidate.confidence > 0.4 {
+      print(candidate.string)
+    }
   }
   exit(0)
 }

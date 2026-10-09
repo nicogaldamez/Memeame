@@ -2,7 +2,7 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "memeame",
   "title": "Memeame",
-  "description": "Buscá un meme, agregale texto y copialo al portapapeles.",
+  "description": "Buscá un meme, agregale texto y copialo al portapapeles. Guardá memes nuevos desde el portapapeles.",
   "icon": "icon.png",
   "author": "nicogaldamez",
   "categories": [
@@ -15,6 +15,12 @@
       "name": "search-memes",
       "title": "Buscar Meme",
       "description": "Buscá un meme por nombre o palabras clave, agregale texto y copialo.",
+      "mode": "view"
+    },
+    {
+      "name": "save-meme",
+      "title": "Guardar Meme del Portapapeles",
+      "description": "Guarda la imagen copiada en la carpeta de memes, con título y palabras clave sugeridas a partir de su texto.",
       "mode": "view"
     }
   ],
