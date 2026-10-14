@@ -22,6 +22,12 @@
       "title": "Guardar Meme del Portapapeles",
       "description": "Guarda la imagen copiada en la carpeta de memes, con título y palabras clave sugeridas a partir de su texto.",
       "mode": "view"
+    },
+    {
+      "name": "search-web",
+      "title": "Buscar Imagen en Internet",
+      "description": "Buscá imágenes en internet o entre las plantillas más usadas, agregales texto y copialas o guardalas.",
+      "mode": "view"
     }
   ],
   "preferences": [

@@ -3,7 +3,9 @@ import AppKit
 import ImageIO
 import Vision
 
-// Uso: memeame-render <entrada> <salida.png|.jpg> <texto arriba> <texto abajo>
+// Uso: memeame-render render <entrada> <salida.png|.jpg> <cajas>
+//        <cajas> es un JSON: [{"text", "x", "y", "width", "height", "align"}], con el rectángulo en
+//        fracciones de la imagen (origen arriba a la izquierda) y align "top" | "center" | "bottom".
 //      memeame-render thumbnail <video> <salida.jpg>
 //      memeame-render clipboard <salida.png>   (imprime la ruta de la imagen del portapapeles)
 //      memeame-render ocr <imagen>             (imprime el texto de la imagen, una línea por renglón)
@@ -74,10 +76,22 @@ if args.count == 3, args[1] == "ocr" {
   exit(0)
 }
 
-guard args.count == 5 else { fail("uso: memeame-render <entrada> <salida> <arriba> <abajo>") }
+struct Box: Decodable {
+  let text: String
+  let x: CGFloat
+  let y: CGFloat
+  let width: CGFloat
+  let height: CGFloat
+  let align: String
+}
 
-let inputURL = URL(fileURLWithPath: args[1])
-let outputURL = URL(fileURLWithPath: args[2])
+guard args.count == 5, args[1] == "render" else { fail("uso: memeame-render render <entrada> <salida> <cajas>") }
+guard let boxes = try? JSONDecoder().decode([Box].self, from: Data(args[4].utf8)) else {
+  fail("Las cajas de texto no son un JSON válido")
+}
+
+let inputURL = URL(fileURLWithPath: args[2])
+let outputURL = URL(fileURLWithPath: args[3])
 
 let maxSide: CGFloat = 1600
 let minSide: CGFloat = 800
@@ -126,34 +140,40 @@ func attributed(_ text: String, size: CGFloat, stroke: Bool) -> NSAttributedStri
   return NSAttributedString(string: text, attributes: attributes)
 }
 
-func drawCaption(_ text: String, top: Bool) {
-  guard !text.isEmpty else { return }
+func drawCaption(_ box: Box) {
+  guard !box.text.isEmpty else { return }
 
   let margin = width * 0.04
-  let maxWidth = width - margin * 2
-  let maxHeight = height * 0.3
-  let box = CGSize(width: maxWidth, height: .greatestFiniteMagnitude)
-  let words = text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+  let maxWidth = max(box.width * width - margin * 2, 1)
+  let maxHeight = max(box.height * height - margin * 2, 1)
+  let layout = CGSize(width: maxWidth, height: .greatestFiniteMagnitude)
+  let words = box.text.split(whereSeparator: { $0.isWhitespace }).map(String.init)
 
   var size = min(width, height) * 0.14
   var bounds = CGRect.zero
   while true {
-    bounds = attributed(text, size: size, stroke: false)
-      .boundingRect(with: box, options: [.usesLineFragmentOrigin, .usesFontLeading])
+    bounds = attributed(box.text, size: size, stroke: false)
+      .boundingRect(with: layout, options: [.usesLineFragmentOrigin, .usesFontLeading])
     let widestWord = words.map { attributed($0, size: size, stroke: false).size().width }.max() ?? 0
     if (bounds.height <= maxHeight && widestWord <= maxWidth) || size <= 12 { break }
     size *= 0.93
   }
 
+  // Las cajas vienen con el origen arriba; AppKit dibuja con el origen abajo.
   let textHeight = ceil(bounds.height)
-  let rect = CGRect(
-    x: margin, y: top ? height - margin - textHeight : margin, width: maxWidth, height: textHeight)
-  attributed(text, size: size, stroke: true).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading])
-  attributed(text, size: size, stroke: false).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+  let top = height - box.y * height - margin
+  let y: CGFloat
+  switch box.align {
+  case "top": y = top - textHeight
+  case "bottom": y = top - maxHeight
+  default: y = top - (maxHeight + textHeight) / 2
+  }
+  let rect = CGRect(x: box.x * width + margin, y: y, width: maxWidth, height: textHeight)
+  attributed(box.text, size: size, stroke: true).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading])
+  attributed(box.text, size: size, stroke: false).draw(with: rect, options: [.usesLineFragmentOrigin, .usesFontLeading])
 }
 
-drawCaption(args[3], top: true)
-drawCaption(args[4], top: false)
+boxes.forEach(drawCaption)
 context.flushGraphics()
 
 let isJPEG = ["jpg", "jpeg"].contains(outputURL.pathExtension.lowercased())

@@ -188,7 +188,11 @@ export async function readClipboardImage(): Promise<ClipboardImage> {
 export async function addMeme(source: string, title: string, keywords: string[]): Promise<string> {
   const folder = memesFolder();
   const extension = path.extname(source).toLowerCase();
-  const base = title.replace(/[/:\\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  const base = title
+    .replace(/[/:\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
 
   const taken = new Set((await readdir(folder)).map((file) => metadataKey(file).toLowerCase()));
   let file = `${base}${extension}`;
@@ -208,20 +212,30 @@ export async function saveMeme(file: string, title: string, keywords: string[]):
   await writeFile(path.join(folder, METADATA_FILE), JSON.stringify(metadata, null, 2) + "\n");
 }
 
+// Texto a dibujar dentro de un rectángulo, en fracciones de la imagen con el origen arriba a la izquierda.
+export type TextBox = {
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  align: "top" | "center" | "bottom";
+};
+
 // `name` es el nombre del archivo de salida, sin extensión.
-export async function renderMeme(meme: Meme, top: string, bottom: string, name = "meme"): Promise<string> {
+export async function renderMeme(meme: Meme, boxes: TextBox[], name = "meme"): Promise<string> {
   await mkdir(environment.supportPath, { recursive: true });
   const extension = path.extname(meme.file).toLowerCase() === ".png" ? "png" : "jpg";
   const output = path.join(environment.supportPath, `${name}.${extension}`);
-  await run([meme.path, output, top, bottom]);
+  await run(["render", meme.path, output, JSON.stringify(boxes)]);
   return output;
 }
 
 // Cada vista previa va a un archivo distinto porque Raycast cachea las imágenes por ruta.
 let previewCount = 0;
 
-export function renderPreview(meme: Meme, top: string, bottom: string): Promise<string> {
-  return renderMeme(meme, top, bottom, `${PREVIEW_PREFIX}${Date.now()}-${previewCount++}`);
+export function renderPreview(meme: Meme, boxes: TextBox[]): Promise<string> {
+  return renderMeme(meme, boxes, `${PREVIEW_PREFIX}${Date.now()}-${previewCount++}`);
 }
 
 export async function removePreview(preview: string): Promise<void> {
